@@ -1,133 +1,429 @@
-openapi: 3.0.2
+openapi: 3.0.3
 info:
-  title: SnapFurnishAI API
-  description: Backend Orchestration for SnapFurnishAI
+  title: SnapFurnish AI API
   version: 1.0.0
+  description: |
+    SnapFurnish AI is an AI-powered product recommendation system that analyzes
+    room images and provides personalized product suggestions based on user preferences.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+tags:
+  - name: Recommendations
+  - name: Products
+  - name: Analytics
 paths:
-  /session/start:
+  /api/recommendations:
     post:
-      summary: Start a user session
-      responses:
-        '200':
-          description: Session started
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  session_id:
-                    type: string
-                    example: abc123
-  /session/{session_id}/upload-photo:
-    post:
-      summary: Upload user photo
-      parameters:
-        - in: path
-          name: session_id
-          required: true
-          schema:
-            type: string
+      tags:
+        - Recommendations
+      summary: Get AI-powered product recommendations
+      description: Get personalized product recommendations from a room image and optional preferences.
+      operationId: getRecommendations
       requestBody:
+        required: true
         content:
           multipart/form-data:
             schema:
               type: object
+              required:
+                - image_file
               properties:
-                file:
+                image_file:
                   type: string
                   format: binary
-      responses:
-        '200':
-          description: Photo uploaded
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                  filetype:
-                    type: string
-  /session/{session_id}/user-input:
-    post:
-      summary: Save user chat input and preferences
-      parameters:
-        - in: path
-          name: session_id
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
+                  description: Room image file (JPEG/PNG, max 10MB).
                 room_type:
                   type: string
+                  description: Room type (for example, bedroom, living room, kitchen).
+                style_preference:
+                  type: string
+                  description: Preferred style (for example, modern, minimalist, traditional).
                 budget:
                   type: number
-                  nullable: true
-                style:
+                  format: float
+                  description: Budget in the specified currency.
+                currency:
                   type: string
-                  nullable: true
-                color_preferences:
+                  default: USD
+                  description: Currency code (USD, EUR, GBP).
+                brand_preference:
                   type: string
-                  nullable: true
-                chat_input:
-                  type: string
+                  description: Preferred brand (for example, IKEA, West Elm).
       responses:
-        '200':
-          description: User input stored
+        "200":
+          description: Recommendations generated successfully.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-  /session/{session_id}/recommend:
-    post:
-      summary: Get recommendations for the user
+                $ref: "#/components/schemas/RecommendationResponse"
+        "400":
+          description: Bad Request - Invalid parameters or image.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageError"
+              examples:
+                invalidImage:
+                  summary: Invalid image quality
+                  value:
+                    message: I'm having trouble seeing the details in your photo clearly. Could you please upload a clearer, well-lit image of your room?
+        "429":
+          description: Rate or token limit exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+              examples:
+                rateLimited:
+                  summary: Request rate exceeded
+                  value:
+                    detail: Request rate limit exceeded. Try again in 60 seconds.
+                tokenLimited:
+                  summary: Token limit exceeded
+                  value:
+                    detail: Token limit exceeded (50000 tokens used). Try again later.
+        "422":
+          description: Validation error - Invalid input format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+  /products:
+    get:
+      tags:
+        - Products
+      summary: Search and filter products
+      description: Search products with optional filter parameters.
+      operationId: searchProducts
       parameters:
-        - in: path
-          name: session_id
-          required: true
+        - in: query
+          name: room_type
           schema:
             type: string
+          description: Filter by room type.
+        - in: query
+          name: style
+          schema:
+            type: string
+          description: Filter by style.
+        - in: query
+          name: brand
+          schema:
+            type: string
+          description: Filter by brand.
+        - in: query
+          name: max_price
+          schema:
+            type: number
+            format: float
+          description: Maximum price filter.
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: Currency for price filter.
+        - in: query
+          name: color
+          schema:
+            type: string
+          description: Filter by color.
+        - in: query
+          name: in_stock
+          schema:
+            type: boolean
+          description: Filter by stock status.
       responses:
-        '200':
-          description: Recommendation response
+        "200":
+          description: List of matching products.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RecommendationResponse'
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+        "422":
+          description: Validation error - Invalid query parameter format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+  /products/{product_id}:
+    get:
+      tags:
+        - Products
+      summary: Get product details
+      description: Get detailed information about a specific product.
+      operationId: getProductDetails
+      parameters:
+        - in: path
+          name: product_id
+          required: true
+          schema:
+            type: integer
+          description: Product identifier.
+      responses:
+        "200":
+          description: Product details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetails"
+        "404":
+          description: Not found - Product does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+        "422":
+          description: Validation error - Invalid path parameter format.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+  /dashboard:
+    get:
+      tags:
+        - Analytics
+      summary: Analytics dashboard
+      description: Interactive HTML dashboard showing quality metrics and trends.
+      operationId: getAnalyticsDashboard
+      responses:
+        "200":
+          description: HTML dashboard page.
+          content:
+            text/html:
+              schema:
+                type: string
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
+  /api/analytics:
+    get:
+      tags:
+        - Analytics
+      summary: Analytics data
+      description: JSON analytics data for monitoring and integrations.
+      operationId: getAnalyticsData
+      responses:
+        "200":
+          description: Analytics payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsResponse"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetailError"
 components:
   schemas:
-    Recommendation:
+    StylePersona:
       type: object
       properties:
-        name:
+        summary:
           type: string
-        style_tag:
+        detected_room:
+          type: string
+        lighting:
+          type: string
+        style_hints:
+          type: string
+      required:
+        - summary
+        - detected_room
+        - lighting
+        - style_hints
+    RecommendationItem:
+      type: object
+      properties:
+        product_id:
+          type: integer
+        name:
           type: string
         price:
           type: number
-        discount:
-          type: number
-        deal_text:
+          format: float
+        currency:
           type: string
-          nullable: true
+        brand:
+          type: string
         rationale:
           type: string
+        image_url:
+          type: string
+          format: uri
+      required:
+        - product_id
+        - name
+        - price
+        - currency
+        - brand
+        - rationale
+        - image_url
     RecommendationResponse:
       type: object
       properties:
-        persona:
-          type: string
+        style_persona:
+          $ref: "#/components/schemas/StylePersona"
         recommendations:
           type: array
           items:
-            $ref: '#/components/schemas/Recommendation'
-        next_action:
+            $ref: "#/components/schemas/RecommendationItem"
+        next_steps:
+          type: array
+          items:
+            type: string
+      required:
+        - style_persona
+        - recommendations
+        - next_steps
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
           type: string
+        price:
+          type: number
+          format: float
+        currency:
+          type: string
+        brand:
+          type: string
+        style:
+          type: string
+        room_type:
+          type: string
+        color:
+          type: string
+        in_stock:
+          type: boolean
+        discount_pct:
+          type: number
+          format: float
+      required:
+        - id
+        - name
+        - price
+        - currency
+        - brand
+        - style
+        - room_type
+        - color
+        - in_stock
+        - discount_pct
+    ProductDetails:
+      allOf:
+        - $ref: "#/components/schemas/Product"
+        - type: object
+          properties:
+            description:
+              type: string
+          required:
+            - description
+    AnalyticsCriteriaPerformance:
+      type: object
+      properties:
+        accuracy:
+          type: number
+          format: float
+        relevance:
+          type: number
+          format: float
+        tone:
+          type: number
+          format: float
+      required:
+        - accuracy
+        - relevance
+        - tone
+    ProblematicScenario:
+      type: object
+      properties:
+        file:
+          type: string
+        score:
+          type: number
+          format: float
+        failed_criteria:
+          type: array
+          items:
+            type: string
+      required:
+        - file
+        - score
+        - failed_criteria
+    AnalyticsResponse:
+      type: object
+      properties:
+        total_evaluations:
+          type: integer
+        pass_rate:
+          type: number
+          format: float
+        avg_score:
+          type: number
+          format: float
+        criteria_performance:
+          $ref: "#/components/schemas/AnalyticsCriteriaPerformance"
+        problematic_scenarios:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProblematicScenario"
+      required:
+        - total_evaluations
+        - pass_rate
+        - avg_score
+        - criteria_performance
+        - problematic_scenarios
+    MessageError:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+    DetailError:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+        - detail
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+      required:
+        - detail
