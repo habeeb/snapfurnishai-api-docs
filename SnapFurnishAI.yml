@@ -1,0 +1,133 @@
+openapi: 3.0.2
+info:
+  title: SnapFurnishAI API
+  description: Backend Orchestration for SnapFurnishAI
+  version: 1.0.0
+paths:
+  /session/start:
+    post:
+      summary: Start a user session
+      responses:
+        '200':
+          description: Session started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+                    example: abc123
+  /session/{session_id}/upload-photo:
+    post:
+      summary: Upload user photo
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Photo uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  filetype:
+                    type: string
+  /session/{session_id}/user-input:
+    post:
+      summary: Save user chat input and preferences
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                room_type:
+                  type: string
+                budget:
+                  type: number
+                  nullable: true
+                style:
+                  type: string
+                  nullable: true
+                color_preferences:
+                  type: string
+                  nullable: true
+                chat_input:
+                  type: string
+      responses:
+        '200':
+          description: User input stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /session/{session_id}/recommend:
+    post:
+      summary: Get recommendations for the user
+      parameters:
+        - in: path
+          name: session_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Recommendation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+components:
+  schemas:
+    Recommendation:
+      type: object
+      properties:
+        name:
+          type: string
+        style_tag:
+          type: string
+        price:
+          type: number
+        discount:
+          type: number
+        deal_text:
+          type: string
+          nullable: true
+        rationale:
+          type: string
+    RecommendationResponse:
+      type: object
+      properties:
+        persona:
+          type: string
+        recommendations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        next_action:
+          type: string
